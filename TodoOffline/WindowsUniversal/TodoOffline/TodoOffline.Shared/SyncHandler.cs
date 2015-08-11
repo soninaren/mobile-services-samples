@@ -1,4 +1,6 @@
-﻿using System;
+﻿#define Client
+//#define Server
+using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.WindowsAzure.MobileServices;
@@ -14,53 +16,63 @@ namespace TodoOffline
         MobileServiceClient client;
         const string LOCAL_VERSION = "Use local version";
         const string SERVER_VERSION = "Use server version";
-
+        public bool ConflictFound = false;
+        private IMobileServiceSyncTable<TodoItem> todoTable;
         public SyncHandler(MobileServiceClient client)
         {
             this.client = client;
+            todoTable = App.MobileService.GetSyncTable<TodoItem>();
         }
 
-        public virtual Task OnPushCompleteAsync(MobileServicePushCompletionResult result)
+        public virtual async Task OnPushCompleteAsync(MobileServicePushCompletionResult result)
         {
-            // Server wins             
+
             foreach (MobileServiceTableOperationError error in result.Errors)
             {
+                #region Server wins
+#if Server
+
 
                 #region insert
                 // 403
-                // Client 1 soft deleted // Client 2 inserts
+                // Client 1 soft deleted or client 2 network failure // Client 2 inserts
                 // resolution Update the local item with server value
                 if (error.OperationKind == MobileServiceTableOperationKind.Insert && error.Status == HttpStatusCode.Conflict)
                 {
+
+                    // If same preserve server changes 
+                    // if different preserver client changes
+                    // cannot compare no server item get server item in a seperate call
                     TodoItem clientItem = error.Item.ToObject<TodoItem>();
+                    var todoTab = App.MobileService.GetTable<TodoItem>();
+                    //TodoItem serverItem;
 
-                    // cannot compare no server item
-                    //TodoItem serverItem = error.Result.ToObject<TodoItem>();                    
-                    //if (clientItem.Text == serverItem.Text)
-                    //{
-                    //    error.CancelAndUpdateItemAsync(error.Result);
-                    //}
-                    //else
-                    //{
-                    error.CancelAndDiscardItemAsync();
+                    var serverValue = await todoTab.LookupAsync(clientItem.Id);
 
-                    // how to insert a new record, this shows there a dialogbox with text were no errors but push failed.
-                    //IMobileServiceSyncTable<TodoItem> todoTable = App.MobileService.GetSyncTable<TodoItem>();                                        
-                    //clientItem.Id = null;
-                    //todoTable.InsertAsync(clientItem);
-                    //App.MobileService.SyncContext.PushAsync();
 
-                    //}
+                    // failed network call so remove update client with server version
+                    if (clientItem.Text == serverValue.Text)
+                    {
+                       await error.CancelAndUpdateItemAsync(error.Result);
+                    }
+                    // Id collision
+                    else
+                    {
+                        clientItem.Id = null;
+                        await todoTable.InsertAsync(clientItem);
+                        await error.CancelAndDiscardItemAsync();
+
+                    }
                 }
-                #endregion                
+                #endregion
 
-                #region update                
+                #region update
                 // 412 
                 // Client 1 updates // Client 2 tries to update outdated item
                 // resolution Update the local item with server value
                 if (error.OperationKind == MobileServiceTableOperationKind.Update && error.Status == HttpStatusCode.PreconditionFailed)
                 {
-                    error.CancelAndUpdateItemAsync(error.Result);
+                    await error.CancelAndUpdateItemAsync(error.Result);
                 }
 
                 //404
@@ -68,31 +80,91 @@ namespace TodoOffline
                 // Remove the item from local store
                 if (error.OperationKind == MobileServiceTableOperationKind.Update && error.Status == HttpStatusCode.NotFound)
                 {
-                    error.CancelAndDiscardItemAsync();
+                    await error.CancelAndDiscardItemAsync();
                 }
-                #endregion                
+                #endregion
 
                 #region delete
-                
+
                 //412
                 // Client 1 updates // Client 2 tries to deletes item
                 // Resolution cancel the delete and update the local store with server value
                 if (error.OperationKind == MobileServiceTableOperationKind.Delete && error.Status == HttpStatusCode.PreconditionFailed)
                 {
-                    error.CancelAndUpdateItemAsync(error.Result);
+                    await error.CancelAndUpdateItemAsync(error.Result);
+                }
+                #endregion
+
+#endif
+                #endregion
+
+                #region ClientWins
+#if Client
+                TodoItem clientItem = error.Item.ToObject<TodoItem>();
+                await error.CancelAndDiscardItemAsync();
+
+                #region insert
+                // 403
+                // Client 1 soft deleted or client 2 network failure // Client 2 inserts
+                // resolution Update the local item with server value
+                if (error.OperationKind == MobileServiceTableOperationKind.Insert && error.Status == HttpStatusCode.Conflict)
+                {                   
+                    var todoTab = App.MobileService.GetTable<TodoItem>();
+                    //TodoItem serverItem;
+
+                    var serverValue = await todoTab.LookupAsync(clientItem.Id);
+
+                    // failed network call so remove update client with server version
+                    if (clientItem.Text == serverValue.Text)
+                    {
+                        await error.CancelAndUpdateItemAsync(error.Result);
+                    }
+                    // Id collision
+                    else
+                    {
+                        clientItem.Id = null;
+                        await todoTable.InsertAsync(clientItem);
+                        await error.CancelAndDiscardItemAsync();
+
+                    }
+                }
+                #endregion
+
+                #region update
+                // 412 
+                // Client 1 updates // Client 2 tries to update outdated item
+                // resolution Update the server item
+                if (error.OperationKind == MobileServiceTableOperationKind.Update && error.Status == HttpStatusCode.PreconditionFailed)
+                {
+                    error.Item[MobileServiceSystemColumns.Version] = error.Result[MobileServiceSystemColumns.Version];
+                    await todoTable.UpdateAsync(clientItem);
                 }
 
                 //404
+                // Client 1 deletes // Client 2 tries to update deleted item
+                // insert the item to the server with a different id or undelete the item if soft delete is enabled
+                if (error.OperationKind == MobileServiceTableOperationKind.Update && error.Status == HttpStatusCode.NotFound)
+                {
+                    // if soft delete enabled the call undelete and then update
+                    await todoTable.InsertAsync(clientItem);
+                }
+                #endregion
+
+                #region delete
+
+                //412
                 // Client 1 updates // Client 2 tries to deletes item
                 // Resolution cancel the delete and update the local store with server value
-                if (error.OperationKind == MobileServiceTableOperationKind.Delete && error.Status == HttpStatusCode.NotFound)
+                if (error.OperationKind == MobileServiceTableOperationKind.Delete && error.Status == HttpStatusCode.PreconditionFailed)
                 {
-                    error.CancelAndDiscardItemAsync();
-                }
+                    error.Item[MobileServiceSystemColumns.Version] = error.Result[MobileServiceSystemColumns.Version];
+                    await todoTable.DeleteAsync(clientItem);
 
+                }
                 #endregion
+#endif                
+                #endregion                
             }
-            return Task.FromResult(0);
         }
 
         public Task<JObject> ExecuteTableOperationAsync(IMobileServiceTableOperation operation)
@@ -100,7 +172,6 @@ namespace TodoOffline
             Debug.WriteLine("Executing operation '{0}' for table '{1}'", operation.Kind, operation.Table.TableName);
             return operation.ExecuteAsync();
         }
-
 
         //public virtual async Task<JObject> ExecuteTableOperationAsync(IMobileServiceTableOperation operation)
         //{

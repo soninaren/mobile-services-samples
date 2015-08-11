@@ -100,6 +100,7 @@ namespace TodoOffline
             try
             {
                 await App.MobileService.SyncContext.PushAsync();
+                await App.MobileService.SyncContext.PushAsync();      
             }
             catch (MobileServicePushFailedException ex)
             {
