@@ -15,7 +15,7 @@ namespace TodoOffline
     {
         private MobileServiceCollection<TodoItem, TodoItem> items;
         private IMobileServiceSyncTable<TodoItem> todoTable = App.MobileService.GetSyncTable<TodoItem>();
-
+        public TodoItem lastDeleted;
         public MainPage()
         {
             this.InitializeComponent();
@@ -160,6 +160,22 @@ namespace TodoOffline
             var todoItem = new TodoItem { Text = TextInput.Text };
             TextInput.Text = "";
             await InsertTodoItem(todoItem);
+        }
+
+        private async void ButtonConflic_Click(object sender, Windows.UI.Xaml.RoutedEventArgs e)
+        {
+            await todoTable.InsertAsync(lastDeleted);
+            items.Add(lastDeleted);
+        }
+
+        private async void ButtonDelte_Click(object sender, RoutedEventArgs e)
+        {
+            var tb = (Button)sender;
+            var item = tb.DataContext as TodoItem;
+            lastDeleted = item;
+            await todoTable.DeleteAsync(item);
+            await RefreshTodoItems();
+
         }
 
         private async void CheckBox_Clicked(object sender, RoutedEventArgs e)

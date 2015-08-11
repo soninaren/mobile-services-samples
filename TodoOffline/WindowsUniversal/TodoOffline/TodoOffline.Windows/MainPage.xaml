@@ -60,6 +60,9 @@
                         <Button Margin="72,0,0,0" Height="44" Name="ButtonRefresh" Click="ButtonRefresh_Click">
                             Refresh
                         </Button>
+                        <Button Margin="10,0,0,0" Height="44" Name="ButtonConflic" Click="ButtonConflic_Click">
+                            Create Conflict
+                        </Button>
                         <Button Margin="10,0,0,0" Name="ButtonPull" Click="ButtonPull_Click">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Margin="5">Pull</TextBlock>
@@ -83,7 +86,13 @@
                             <StackPanel Orientation="Horizontal">
                                 <CheckBox Name="CheckBoxComplete" IsChecked="{Binding Complete, Mode=TwoWay}" Click="CheckBox_Clicked" Content="" Margin="10,5" VerticalAlignment="Center"/>
                                 <TextBox Name="TodoItemText" Text="{Binding Text, Mode=TwoWay}" Margin="0,5" Width="550" IsReadOnly="False" BorderBrush="{x:Null}" KeyDown="TodoItem_KeyDown" LostFocus="TodoItemText_LostFocus"/>
-                            </StackPanel>
+                                    <Button Margin="10,0,0,0" Name="ButtonDelete" Click="ButtonDelte_Click">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Margin="5">Delete</TextBlock>
+                                            <SymbolIcon Symbol="Delete"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
                         </DataTemplate>
                     </ListView.ItemTemplate>
                     </ListView>
