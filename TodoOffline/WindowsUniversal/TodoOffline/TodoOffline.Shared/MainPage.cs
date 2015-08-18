@@ -4,39 +4,39 @@ using Windows.UI.Popups;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Navigation;
-
+using System.Collections.Generic;
 using Microsoft.WindowsAzure.MobileServices;
 using Microsoft.WindowsAzure.MobileServices.SQLiteStore;
 using Microsoft.WindowsAzure.MobileServices.Sync;
 
 namespace TodoOffline
 {
-    sealed partial class MainPage: Page
+    sealed partial class MainPage : Page
     {
         private MobileServiceCollection<TodoItem, TodoItem> items;
         private IMobileServiceSyncTable<TodoItem> todoTable = App.MobileService.GetSyncTable<TodoItem>();
         public TodoItem lastDeleted;
         public MainPage()
         {
-            this.InitializeComponent();
+            this.InitializeComponent();           
         }
 
         private async void ButtonRefresh_Click(object sender, RoutedEventArgs e)
         {
             await RefreshTodoItems();
-        }
-
+        }        
 
         protected override async void OnNavigatedTo(NavigationEventArgs e)
         {
             if (e.NavigationMode != NavigationMode.New) // only handle initial launch 
-                return; 
+                return;
 
             if (!App.MobileService.SyncContext.IsInitialized)
             {
                 var store = new MobileServiceSQLiteStore("localsync.db");
                 store.DefineTable<TodoItem>();
-                await App.MobileService.SyncContext.InitializeAsync(store, new SyncHandler(App.MobileService));
+                
+                await App.MobileService.SyncContext.InitializeAsync(store, new SyncHandler(App.MobileService,new MyConflictResolver()));
             }
 
             await RefreshTodoItems();
@@ -85,7 +85,7 @@ namespace TodoOffline
                 await d.ShowAsync();
             }
 
-            ButtonPull.IsEnabled = true; 
+            ButtonPull.IsEnabled = true;
         }
 
 
@@ -100,7 +100,7 @@ namespace TodoOffline
             try
             {
                 await App.MobileService.SyncContext.PushAsync();
-                await App.MobileService.SyncContext.PushAsync();      
+                await App.MobileService.SyncContext.PushAsync();
             }
             catch (MobileServicePushFailedException ex)
             {
@@ -202,7 +202,7 @@ namespace TodoOffline
                 ListItems.Focus(FocusState.Programmatic);
             }
         }
-         
+
         private async void TodoItemText_LostFocus(object sender, Windows.UI.Xaml.RoutedEventArgs e)
         {
             var tb = (TextBox)sender;

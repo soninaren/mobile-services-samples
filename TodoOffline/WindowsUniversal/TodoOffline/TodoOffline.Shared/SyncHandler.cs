@@ -11,20 +11,22 @@ using System.Net;
 
 namespace TodoOffline
 {
-    public class SyncHandler : IMobileServiceSyncHandler
+    public class SyncHandler : MobileServiceSyncHandler
     {
         MobileServiceClient client;
         const string LOCAL_VERSION = "Use local version";
         const string SERVER_VERSION = "Use server version";
         public bool ConflictFound = false;
         private IMobileServiceSyncTable<TodoItem> todoTable;
-        public SyncHandler(MobileServiceClient client)
+
+        public SyncHandler(MobileServiceClient client, ConflictResolver conflictResolver)
+            : base(conflictResolver: conflictResolver)
         {
             this.client = client;
             todoTable = App.MobileService.GetSyncTable<TodoItem>();
         }
 
-        public virtual async Task OnPushCompleteAsync(MobileServicePushCompletionResult result)
+        public override async Task OnPushCompleteAsync(MobileServicePushCompletionResult result)
         {
 
             foreach (MobileServiceTableOperationError error in result.Errors)
@@ -108,7 +110,7 @@ namespace TodoOffline
                 // Client 1 soft deleted or client 2 network failure // Client 2 inserts
                 // resolution Update the local item with server value
                 if (error.OperationKind == MobileServiceTableOperationKind.Insert && error.Status == HttpStatusCode.Conflict)
-                {                   
+                {
                     var todoTab = App.MobileService.GetTable<TodoItem>();
                     //TodoItem serverItem;
 
@@ -162,8 +164,8 @@ namespace TodoOffline
 
                 }
                 #endregion
-#endif                
-                #endregion                
+#endif
+                #endregion
             }
         }
 
@@ -173,75 +175,7 @@ namespace TodoOffline
             return operation.ExecuteAsync();
         }
 
-        //public virtual async Task<JObject> ExecuteTableOperationAsync(IMobileServiceTableOperation operation)
-        //{
-        //    MobileServiceInvalidOperationException error;
-        //    Func<Task<JObject>> tryOperation = operation.ExecuteAsync;
 
-        //    do
-        //    {
-        //        error = null;
-
-        //        try
-        //        {
-        //            JObject result = await operation.ExecuteAsync();
-        //            return result;
-        //        }
-        //        catch (MobileServiceConflictException ex)
-        //        {
-        //            error = ex;
-        //        }
-        //        catch (MobileServicePreconditionFailedException ex)
-        //        {
-        //            error = ex;
-        //        }
-        //        catch (Exception e)
-        //        {
-        //            Debug.WriteLine(e.ToString());
-        //            throw e;
-        //        }
-
-        //        if (error != null)
-        //        {
-        //            var localItem = operation.Item.ToObject<TodoItem>();
-        //            var serverValue = error.Value;
-        //            if (serverValue == null) // 409 doesn't return the server item
-        //            {
-        //                serverValue = await operation.Table.LookupAsync(localItem.Id) as JObject;
-        //            }
-        //            var serverItem = serverValue.ToObject<TodoItem>();
-
-
-        //            if (serverItem.Complete == localItem.Complete && serverItem.Text == localItem.Text)
-        //            {
-        //                // items are same so we can ignore the conflict
-        //                return serverValue;
-        //            }
-
-        //            IUICommand command = await ShowConflictDialog(localItem, serverValue);
-        //            if (command.Label == LOCAL_VERSION)
-        //            {
-        //                // Overwrite the server version and try the operation again by continuing the loop
-        //                operation.Item[MobileServiceSystemColumns.Version] = serverValue[MobileServiceSystemColumns.Version];
-        //                if (error is MobileServiceConflictException) // change operation from Insert to Update
-        //                {
-        //                    tryOperation = async () => await operation.Table.UpdateAsync(operation.Item) as JObject;
-        //                }
-        //                continue;
-        //            }
-        //            else if (command.Label == SERVER_VERSION)
-        //            {
-        //                return (JObject)serverValue;
-        //            }
-        //            else
-        //            {
-        //                operation.AbortPush();
-        //            }
-        //        }
-        //    } while (error != null);
-
-        //    return null;
-        //}
 
         private async Task<IUICommand> ShowConflictDialog(TodoItem localItem, JObject serverValue)
         {
